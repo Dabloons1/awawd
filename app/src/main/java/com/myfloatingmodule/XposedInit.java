@@ -37,6 +37,13 @@ public class XposedInit implements IXposedHookLoadPackage {
             } catch (Exception e) {
                 XposedBridge.log("MyFloatingModule: Advanced IL2CPP hooking failed: " + e.getMessage());
             }
+            
+            // Try anti-cheat bypass approach
+            try {
+                hookAntiCheatBypass(lpparam);
+            } catch (Exception e) {
+                XposedBridge.log("MyFloatingModule: Anti-cheat bypass failed: " + e.getMessage());
+            }
 
                 // Try multiple approaches to get context and start floating window
                 try {
@@ -384,7 +391,7 @@ public class XposedInit implements IXposedHookLoadPackage {
     
     private void hookUnityNativeFunctions(XC_LoadPackage.LoadPackageParam lpparam) {
         try {
-            XposedBridge.log("MyFloatingModule: Hooking Unity native functions");
+            XposedBridge.log("MyFloatingModule: Hooking Unity native functions with anti-cheat bypass");
             
             // Hook UnityPlayer methods
             Class<?> unityPlayerClass = XposedHelpers.findClass("com.unity3d.player.UnityPlayer", lpparam.classLoader);
@@ -399,6 +406,15 @@ public class XposedInit implements IXposedHookLoadPackage {
                         String gameObject = (String) param.args[0];
                         String method = (String) param.args[1];
                         String message = (String) param.args[2];
+                        
+                        // Anti-cheat bypass: Block security-related messages
+                        if (gameObject.contains("AppGuard") || gameObject.contains("HIVE") || 
+                            method.contains("onViolationCallback") || method.contains("AuthV4") ||
+                            method.contains("onS2AuthTryCallback")) {
+                            XposedBridge.log("MyFloatingModule: *** ANTI-CHEAT BYPASS *** - Blocking: " + gameObject + "." + method);
+                            param.setResult(null); // Block the call
+                            return;
+                        }
                         
                         XposedBridge.log("MyFloatingModule: Unity Message - " + gameObject + "." + method + "(" + message + ")");
                         
@@ -418,6 +434,15 @@ public class XposedInit implements IXposedHookLoadPackage {
                         protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                             String gameObject = (String) param.args[0];
                             String method = (String) param.args[1];
+                            
+                            // Anti-cheat bypass: Block security-related calls
+                            if (gameObject.contains("AppGuard") || gameObject.contains("HIVE") || 
+                                method.contains("onViolationCallback") || method.contains("AuthV4")) {
+                                XposedBridge.log("MyFloatingModule: *** ANTI-CHEAT BYPASS *** - Blocking: " + gameObject + "." + method);
+                                param.setResult(null); // Block the call
+                                return;
+                            }
+                            
                             XposedBridge.log("MyFloatingModule: Unity Call - " + gameObject + "." + method);
                         }
                     });
@@ -616,6 +641,85 @@ public class XposedInit implements IXposedHookLoadPackage {
             
         } catch (Exception e) {
             XposedBridge.log("MyFloatingModule: Unity class loading hook failed: " + e.getMessage());
+        }
+    }
+    
+    private void hookAntiCheatBypass(XC_LoadPackage.LoadPackageParam lpparam) {
+        try {
+            XposedBridge.log("MyFloatingModule: Implementing anti-cheat bypass");
+            
+            // Hook AppGuardUnityManager to disable anti-cheat
+            try {
+                Class<?> appGuardClass = XposedHelpers.findClass("AppGuardUnityManager", lpparam.classLoader);
+                if (appGuardClass != null) {
+                    XposedBridge.log("MyFloatingModule: ✓ Found AppGuardUnityManager - Disabling anti-cheat");
+                    
+                    // Hook onViolationCallback to block violations
+                    XposedHelpers.findAndHookMethod(appGuardClass, "onViolationCallback", 
+                        int.class, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            XposedBridge.log("MyFloatingModule: *** ANTI-CHEAT BYPASS *** - Blocking violation callback: " + param.args[0]);
+                            param.setResult(null); // Block the violation callback
+                        }
+                    });
+                    
+                    // Hook onS2AuthTryCallback to block authentication
+                    XposedHelpers.findAndHookMethod(appGuardClass, "onS2AuthTryCallback", 
+                        int.class, String.class, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            XposedBridge.log("MyFloatingModule: *** ANTI-CHEAT BYPASS *** - Blocking S2Auth callback");
+                            param.setResult(null); // Block the authentication callback
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                XposedBridge.log("MyFloatingModule: AppGuardUnityManager hook failed: " + e.getMessage());
+            }
+            
+            // Hook HIVEUnityPluginObject to disable HIVE security
+            try {
+                Class<?> hiveClass = XposedHelpers.findClass("HIVEUnityPluginObject", lpparam.classLoader);
+                if (hiveClass != null) {
+                    XposedBridge.log("MyFloatingModule: ✓ Found HIVEUnityPluginObject - Disabling HIVE security");
+                    
+                    // Hook callEngine method to block security calls
+                    XposedHelpers.findAndHookMethod(hiveClass, "callEngine", 
+                        String.class, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            String message = (String) param.args[0];
+                            if (message.contains("AuthV4") || message.contains("AuthV4Helper")) {
+                                XposedBridge.log("MyFloatingModule: *** ANTI-CHEAT BYPASS *** - Blocking HIVE security call: " + message);
+                                param.setResult(null); // Block the security call
+                            }
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                XposedBridge.log("MyFloatingModule: HIVEUnityPluginObject hook failed: " + e.getMessage());
+            }
+            
+            // Hook System.exit to prevent game from closing due to security violations
+            try {
+                Class<?> systemClass = XposedHelpers.findClass("java.lang.System", lpparam.classLoader);
+                if (systemClass != null) {
+                    XposedHelpers.findAndHookMethod(systemClass, "exit", 
+                        int.class, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            XposedBridge.log("MyFloatingModule: *** ANTI-CHEAT BYPASS *** - Blocking System.exit call");
+                            param.setResult(null); // Block the exit call
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                XposedBridge.log("MyFloatingModule: System.exit hook failed: " + e.getMessage());
+            }
+            
+        } catch (Exception e) {
+            XposedBridge.log("MyFloatingModule: Anti-cheat bypass failed: " + e.getMessage());
         }
     }
 }

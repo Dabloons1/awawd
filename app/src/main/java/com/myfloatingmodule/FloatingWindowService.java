@@ -75,36 +75,40 @@ public class FloatingWindowService extends Service {
             if (isFloatingWindowVisible) return;
 
             try {
-                android.util.Log.d("FloatingWindow", "Attempting to show floating window");
+                android.util.Log.d("FloatingWindow", "Attempting to show floating window with anti-cheat bypass");
                 windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
                 // Create floating view
                 floatingView = createFloatingView();
 
-                // Try multiple window types for better compatibility
+                // Anti-cheat bypass: Use stealthy window types
                 int windowType;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    windowType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+                    // Try TYPE_TOAST first for better stealth
+                    windowType = WindowManager.LayoutParams.TYPE_TOAST;
                 } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
                     windowType = WindowManager.LayoutParams.TYPE_TOAST;
                 } else {
                     windowType = WindowManager.LayoutParams.TYPE_PHONE;
                 }
-                
-                android.util.Log.d("FloatingWindow", "Using window type: " + windowType);
+
+                android.util.Log.d("FloatingWindow", "Using stealthy window type: " + windowType);
             
-            WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                windowType,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | 
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS |
-                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED |
-                WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR |
-                WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
-                PixelFormat.TRANSLUCENT
-            );
+                WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    windowType,
+                    // Anti-cheat bypass: Use stealthy flags
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL |
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS |
+                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED |
+                    WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR |
+                    WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM |
+                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                    PixelFormat.TRANSLUCENT
+                );
             
             params.gravity = Gravity.TOP | Gravity.START;
             params.x = 50;
