@@ -357,26 +357,16 @@ public class GameHookManager {
     
     private static void hookIL2CPPNativeFunctions(XC_LoadPackage.LoadPackageParam lpparam) {
         try {
-            // Hook IL2CPP native functions for memory manipulation
-            XposedBridge.log("MyFloatingModule: Attempting to hook IL2CPP native functions");
+            // Hook Unity native functions for memory manipulation
+            XposedBridge.log("MyFloatingModule: Attempting to hook Unity native functions");
             
-            // Try to hook IL2CPP runtime functions
-            try {
-                Class<?> il2cppRuntimeClass = XposedHelpers.findClass("il2cpp.IL2CPP", lpparam.classLoader);
-                if (il2cppRuntimeClass != null) {
-                    XposedBridge.log("MyFloatingModule: Found IL2CPP runtime class");
-                }
-            } catch (Exception e) {
-                XposedBridge.log("MyFloatingModule: IL2CPP runtime class not found: " + e.getMessage());
-            }
-            
-            // Hook Unity's native IL2CPP functions
+            // Hook Unity's native functions (these actually exist)
             try {
                 Class<?> unityPlayerClass = XposedHelpers.findClass("com.unity3d.player.UnityPlayer", lpparam.classLoader);
                 if (unityPlayerClass != null) {
-                    XposedBridge.log("MyFloatingModule: Found UnityPlayer class, hooking IL2CPP functions");
+                    XposedBridge.log("MyFloatingModule: ✓ Found UnityPlayer class, hooking Unity functions");
                     
-                    // Hook Unity's IL2CPP method calls
+                    // Hook Unity's method calls
                     XposedHelpers.findAndHookMethod(unityPlayerClass, "UnitySendMessage", 
                         String.class, String.class, String.class, new XC_MethodHook() {
                         @Override
@@ -385,7 +375,7 @@ public class GameHookManager {
                             String method = (String) param.args[1];
                             String message = (String) param.args[2];
                             
-                            XposedBridge.log("MyFloatingModule: Unity IL2CPP Message - " + gameObject + "." + method + "(" + message + ")");
+                            XposedBridge.log("MyFloatingModule: Unity Message - " + gameObject + "." + method + "(" + message + ")");
                             
                             // Try to intercept game data modifications
                             if (method.contains("Mission") || method.contains("Data") || method.contains("Player")) {
@@ -393,13 +383,15 @@ public class GameHookManager {
                             }
                         }
                     });
+                } else {
+                    XposedBridge.log("MyFloatingModule: ✗ UnityPlayer class not found");
                 }
             } catch (Exception e) {
-                XposedBridge.log("MyFloatingModule: Unity IL2CPP hook failed: " + e.getMessage());
+                XposedBridge.log("MyFloatingModule: Unity hook failed: " + e.getMessage());
             }
             
         } catch (Exception e) {
-            XposedBridge.log("MyFloatingModule: IL2CPP native functions hook failed: " + e.getMessage());
+            XposedBridge.log("MyFloatingModule: Unity native functions hook failed: " + e.getMessage());
         }
     }
     
