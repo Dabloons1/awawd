@@ -75,6 +75,9 @@ public class GameHookManager {
     
     private static void hookGamePatterns(XC_LoadPackage.LoadPackageParam lpparam) {
         try {
+            // Hook class loading process to catch classes as they're loaded
+            hookClassLoadingProcess(lpparam);
+            
             // Hook actual Soul Strike game classes found in the dump
             String[] targetClasses = {
                 "Data_Mission",              // Mission data (confirmed to exist)
@@ -91,23 +94,63 @@ public class GameHookManager {
                 "Reddot__Manager"            // Notification system
             };
             
-            for (String className : targetClasses) {
-                try {
-                    XposedBridge.log("MyFloatingModule: Attempting to find class: " + className);
-                    Class<?> gameClass = XposedHelpers.findClass(className, lpparam.classLoader);
-                    if (gameClass != null) {
-                        XposedBridge.log("MyFloatingModule: ✓ Found game class: " + className);
-                        hookGameClass(gameClass, className);
-                    } else {
-                        XposedBridge.log("MyFloatingModule: ✗ Class not found: " + className);
+            // Try to find classes with delays to allow them to load
+            for (int attempt = 0; attempt < 3; attempt++) {
+                XposedBridge.log("MyFloatingModule: Class search attempt " + (attempt + 1) + "/3");
+                
+                for (String className : targetClasses) {
+                    try {
+                        XposedBridge.log("MyFloatingModule: Attempting to find class: " + className);
+                        Class<?> gameClass = XposedHelpers.findClass(className, lpparam.classLoader);
+                        if (gameClass != null) {
+                            XposedBridge.log("MyFloatingModule: ✓ Found game class: " + className);
+                            hookGameClass(gameClass, className);
+                        } else {
+                            XposedBridge.log("MyFloatingModule: ✗ Class not found: " + className);
+                        }
+                    } catch (Exception e) {
+                        XposedBridge.log("MyFloatingModule: ✗ Error finding class " + className + ": " + e.getMessage());
+                        // Continue with next class instead of crashing
                     }
-                } catch (Exception e) {
-                    XposedBridge.log("MyFloatingModule: ✗ Error finding class " + className + ": " + e.getMessage());
-                    // Continue with next class instead of crashing
+                }
+                
+                // Wait before next attempt
+                if (attempt < 2) {
+                    try {
+                        Thread.sleep(2000); // 2 second delay
+                    } catch (InterruptedException e) {
+                        // Continue
+                    }
                 }
             }
         } catch (Exception e) {
             XposedBridge.log("MyFloatingModule: Game pattern hook failed: " + e.getMessage());
+        }
+    }
+    
+    private static void hookClassLoadingProcess(XC_LoadPackage.LoadPackageParam lpparam) {
+        try {
+            // Hook ClassLoader.loadClass to catch classes as they're loaded
+            Class<?> classLoaderClass = XposedHelpers.findClass("java.lang.ClassLoader", lpparam.classLoader);
+            if (classLoaderClass != null) {
+                XposedHelpers.findAndHookMethod(classLoaderClass, "loadClass", String.class, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        String className = (String) param.args[0];
+                        
+                        // Log interesting classes
+                        if (className.contains("Data_") || 
+                            className.contains("Player") || 
+                            className.contains("Mission") ||
+                            className.contains("Currency") ||
+                            className.contains("Manager")) {
+                            XposedBridge.log("MyFloatingModule: Class being loaded: " + className);
+                        }
+                    }
+                });
+            }
+        } catch (Exception e) {
+            XposedBridge.log("MyFloatingModule: Class loading hook failed: " + e.getMessage());
         }
     }
     
@@ -242,27 +285,121 @@ public class GameHookManager {
             // Hook IL2CPP runtime functions for low-level memory manipulation
             XposedBridge.log("MyFloatingModule: Attempting to hook IL2CPP runtime");
             
-            // Hook common IL2CPP classes
-            String[] il2cppClasses = {
-                "Il2CppObject",
-                "Il2CppClass", 
-                "Il2CppMethod",
-                "Il2CppType"
+            // Hook Unity's IL2CPP runtime directly
+            hookUnityIL2CPPClasses(lpparam);
+            
+            // Hook IL2CPP native functions
+            hookIL2CPPNativeFunctions(lpparam);
+            
+        } catch (Exception e) {
+            XposedBridge.log("MyFloatingModule: IL2CPP runtime hook failed: " + e.getMessage());
+        }
+    }
+    
+    private static void hookUnityIL2CPPClasses(XC_LoadPackage.LoadPackageParam lpparam) {
+        try {
+            // Hook Unity's IL2CPP classes directly
+            String[] unityIL2CPPClasses = {
+                "UnityEngine.Object",
+                "UnityEngine.MonoBehaviour", 
+                "UnityEngine.GameObject",
+                "UnityEngine.Component",
+                "UnityEngine.Transform",
+                "UnityEngine.RectTransform",
+                "UnityEngine.Canvas",
+                "UnityEngine.UI.Button",
+                "UnityEngine.UI.Text",
+                "UnityEngine.UI.Image"
             };
             
-            for (String className : il2cppClasses) {
+            for (String className : unityIL2CPPClasses) {
                 try {
-                    Class<?> il2cppClass = XposedHelpers.findClass(className, lpparam.classLoader);
-                    if (il2cppClass != null) {
-                        XposedBridge.log("MyFloatingModule: Found IL2CPP class: " + className);
+                    XposedBridge.log("MyFloatingModule: Attempting to find Unity class: " + className);
+                    Class<?> unityClass = XposedHelpers.findClass(className, lpparam.classLoader);
+                    if (unityClass != null) {
+                        XposedBridge.log("MyFloatingModule: ✓ Found Unity class: " + className);
+                        hookUnityClassMethods(unityClass, className);
+                    } else {
+                        XposedBridge.log("MyFloatingModule: ✗ Unity class not found: " + className);
                     }
                 } catch (Exception e) {
-                    // Class not found, continue
+                    XposedBridge.log("MyFloatingModule: ✗ Error finding Unity class " + className + ": " + e.getMessage());
                 }
             }
             
         } catch (Exception e) {
-            XposedBridge.log("MyFloatingModule: IL2CPP runtime hook failed: " + e.getMessage());
+            XposedBridge.log("MyFloatingModule: Unity IL2CPP classes hook failed: " + e.getMessage());
+        }
+    }
+    
+    private static void hookUnityClassMethods(Class<?> unityClass, String className) {
+        try {
+            // Hook common Unity methods
+            String[] unityMethods = {"Update", "Start", "Awake", "OnEnable", "OnDisable", "FixedUpdate", "LateUpdate"};
+            
+            for (String methodName : unityMethods) {
+                try {
+                    XposedHelpers.findAndHookMethod(unityClass, methodName, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            XposedBridge.log("MyFloatingModule: Unity method called: " + className + "." + methodName);
+                        }
+                    });
+                } catch (Exception e) {
+                    // Method not found, continue
+                }
+            }
+            
+        } catch (Exception e) {
+            XposedBridge.log("MyFloatingModule: Error hooking Unity class methods: " + e.getMessage());
+        }
+    }
+    
+    private static void hookIL2CPPNativeFunctions(XC_LoadPackage.LoadPackageParam lpparam) {
+        try {
+            // Hook IL2CPP native functions for memory manipulation
+            XposedBridge.log("MyFloatingModule: Attempting to hook IL2CPP native functions");
+            
+            // Try to hook IL2CPP runtime functions
+            try {
+                Class<?> il2cppRuntimeClass = XposedHelpers.findClass("il2cpp.IL2CPP", lpparam.classLoader);
+                if (il2cppRuntimeClass != null) {
+                    XposedBridge.log("MyFloatingModule: Found IL2CPP runtime class");
+                }
+            } catch (Exception e) {
+                XposedBridge.log("MyFloatingModule: IL2CPP runtime class not found: " + e.getMessage());
+            }
+            
+            // Hook Unity's native IL2CPP functions
+            try {
+                Class<?> unityPlayerClass = XposedHelpers.findClass("com.unity3d.player.UnityPlayer", lpparam.classLoader);
+                if (unityPlayerClass != null) {
+                    XposedBridge.log("MyFloatingModule: Found UnityPlayer class, hooking IL2CPP functions");
+                    
+                    // Hook Unity's IL2CPP method calls
+                    XposedHelpers.findAndHookMethod(unityPlayerClass, "UnitySendMessage", 
+                        String.class, String.class, String.class, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            String gameObject = (String) param.args[0];
+                            String method = (String) param.args[1];
+                            String message = (String) param.args[2];
+                            
+                            XposedBridge.log("MyFloatingModule: Unity IL2CPP Message - " + gameObject + "." + method + "(" + message + ")");
+                            
+                            // Try to intercept game data modifications
+                            if (method.contains("Mission") || method.contains("Data") || method.contains("Player")) {
+                                XposedBridge.log("MyFloatingModule: Game data modification detected: " + method);
+                            }
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                XposedBridge.log("MyFloatingModule: Unity IL2CPP hook failed: " + e.getMessage());
+            }
+            
+        } catch (Exception e) {
+            XposedBridge.log("MyFloatingModule: IL2CPP native functions hook failed: " + e.getMessage());
         }
     }
     

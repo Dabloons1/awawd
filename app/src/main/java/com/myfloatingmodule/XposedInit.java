@@ -153,6 +153,13 @@ public class XposedInit implements IXposedHookLoadPackage {
         XposedBridge.log("MyFloatingModule: Attempting to hook Unity IL2CPP runtime");
         
         try {
+            // Hook IL2CPP runtime directly
+            hookIL2CPPRuntimeDirect(lpparam);
+        } catch (Exception e) {
+            XposedBridge.log("MyFloatingModule: Direct IL2CPP hook failed: " + e.getMessage());
+        }
+        
+        try {
             // Initialize comprehensive game hooks
             GameHookManager.initializeGameHooks(lpparam);
         } catch (Exception e) {
@@ -171,6 +178,66 @@ public class XposedInit implements IXposedHookLoadPackage {
             hookUnityGameLogic(lpparam);
         } catch (Exception e) {
             XposedBridge.log("MyFloatingModule: Unity game logic hook failed: " + e.getMessage());
+        }
+    }
+    
+    private void hookIL2CPPRuntimeDirect(XC_LoadPackage.LoadPackageParam lpparam) {
+        try {
+            XposedBridge.log("MyFloatingModule: Hooking IL2CPP runtime directly");
+            
+            // Hook IL2CPP runtime functions
+            String[] il2cppClasses = {
+                "il2cpp.IL2CPP",
+                "il2cpp.Il2CppObject",
+                "il2cpp.Il2CppClass",
+                "il2cpp.Il2CppMethod",
+                "il2cpp.Il2CppType"
+            };
+            
+            for (String className : il2cppClasses) {
+                try {
+                    XposedBridge.log("MyFloatingModule: Attempting to find IL2CPP class: " + className);
+                    Class<?> il2cppClass = XposedHelpers.findClass(className, lpparam.classLoader);
+                    if (il2cppClass != null) {
+                        XposedBridge.log("MyFloatingModule: ✓ Found IL2CPP class: " + className);
+                    } else {
+                        XposedBridge.log("MyFloatingModule: ✗ IL2CPP class not found: " + className);
+                    }
+                } catch (Exception e) {
+                    XposedBridge.log("MyFloatingModule: ✗ Error finding IL2CPP class " + className + ": " + e.getMessage());
+                }
+            }
+            
+            // Hook Unity's native IL2CPP functions
+            try {
+                Class<?> unityPlayerClass = XposedHelpers.findClass("com.unity3d.player.UnityPlayer", lpparam.classLoader);
+                if (unityPlayerClass != null) {
+                    XposedBridge.log("MyFloatingModule: Found UnityPlayer, hooking IL2CPP methods");
+                    
+                    // Hook Unity's native methods
+                    XposedHelpers.findAndHookMethod(unityPlayerClass, "UnitySendMessage", 
+                        String.class, String.class, String.class, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            String gameObject = (String) param.args[0];
+                            String method = (String) param.args[1];
+                            String message = (String) param.args[2];
+                            
+                            XposedBridge.log("MyFloatingModule: Unity IL2CPP Call - " + gameObject + "." + method + "(" + message + ")");
+                            
+                            // Look for game data modifications
+                            if (method.contains("Data_") || method.contains("Mission") || method.contains("Player")) {
+                                XposedBridge.log("MyFloatingModule: *** GAME DATA DETECTED *** - " + method);
+                            }
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                XposedBridge.log("MyFloatingModule: Unity IL2CPP hook failed: " + e.getMessage());
+            }
+            
+        } catch (Exception e) {
+            XposedBridge.log("MyFloatingModule: Direct IL2CPP runtime hook failed: " + e.getMessage());
         }
     }
     
