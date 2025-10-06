@@ -398,35 +398,41 @@ public class XposedInit implements IXposedHookLoadPackage {
             if (unityPlayerClass != null) {
                 XposedBridge.log("MyFloatingModule: ✓ Found UnityPlayer");
                 
-                // Hook UnitySendMessage to intercept game communications
-                XposedHelpers.findAndHookMethod(unityPlayerClass, "UnitySendMessage", 
-                    String.class, String.class, String.class, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        String gameObject = (String) param.args[0];
-                        String method = (String) param.args[1];
-                        String message = (String) param.args[2];
-                        
-                        // Anti-cheat bypass: Block security-related messages
-                        if (gameObject.contains("AppGuard") || gameObject.contains("HIVE") || 
-                            method.contains("onViolationCallback") || method.contains("AuthV4") ||
-                            method.contains("onS2AuthTryCallback")) {
-                            XposedBridge.log("MyFloatingModule: *** ANTI-CHEAT BYPASS *** - Blocking: " + gameObject + "." + method);
-                            param.setResult(null); // Block the call
-                            return;
+                // Hook UnitySendMessage with proper error handling
+                try {
+                    // Try 3-parameter version first (most common)
+                    XposedHelpers.findAndHookMethod(unityPlayerClass, "UnitySendMessage", 
+                        String.class, String.class, String.class, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            String gameObject = (String) param.args[0];
+                            String method = (String) param.args[1];
+                            String message = (String) param.args[2];
+                            
+                            // Anti-cheat bypass: Block security-related messages
+                            if (gameObject.contains("AppGuard") || gameObject.contains("HIVE") || 
+                                method.contains("onViolationCallback") || method.contains("AuthV4") ||
+                                method.contains("onS2AuthTryCallback")) {
+                                XposedBridge.log("MyFloatingModule: *** ANTI-CHEAT BYPASS *** - Blocking: " + gameObject + "." + method);
+                                param.setResult(null); // Block the call
+                                return;
+                            }
+                            
+                            XposedBridge.log("MyFloatingModule: Unity Message - " + gameObject + "." + method + "(" + message + ")");
+                            
+                            // Look for game data patterns
+                            if (method.contains("Mission") || method.contains("Data") || method.contains("Player") || 
+                                method.contains("Currency") || method.contains("Health") || method.contains("Score")) {
+                                XposedBridge.log("MyFloatingModule: *** GAME DATA INTERCEPTED *** - " + method + " = " + message);
+                            }
                         }
-                        
-                        XposedBridge.log("MyFloatingModule: Unity Message - " + gameObject + "." + method + "(" + message + ")");
-                        
-                        // Look for game data patterns
-                        if (method.contains("Mission") || method.contains("Data") || method.contains("Player") || 
-                            method.contains("Currency") || method.contains("Health") || method.contains("Score")) {
-                            XposedBridge.log("MyFloatingModule: *** GAME DATA INTERCEPTED *** - " + method + " = " + message);
-                        }
-                    }
-                });
+                    });
+                    XposedBridge.log("MyFloatingModule: ✓ Hooked UnitySendMessage (3 params)");
+                } catch (Exception e) {
+                    XposedBridge.log("MyFloatingModule: UnitySendMessage (3 params) hook failed: " + e.getMessage());
+                }
                 
-                // Hook other Unity methods
+                // Try 2-parameter version as fallback
                 try {
                     XposedHelpers.findAndHookMethod(unityPlayerClass, "UnitySendMessage", 
                         String.class, String.class, new XC_MethodHook() {
@@ -446,8 +452,9 @@ public class XposedInit implements IXposedHookLoadPackage {
                             XposedBridge.log("MyFloatingModule: Unity Call - " + gameObject + "." + method);
                         }
                     });
+                    XposedBridge.log("MyFloatingModule: ✓ Hooked UnitySendMessage (2 params)");
                 } catch (Exception e) {
-                    // Method not found, continue
+                    XposedBridge.log("MyFloatingModule: UnitySendMessage (2 params) hook failed: " + e.getMessage());
                 }
             }
             
@@ -655,24 +662,60 @@ public class XposedInit implements IXposedHookLoadPackage {
                     XposedBridge.log("MyFloatingModule: ✓ Found AppGuardUnityManager - Disabling anti-cheat");
                     
                     // Hook onViolationCallback to block violations
-                    XposedHelpers.findAndHookMethod(appGuardClass, "onViolationCallback", 
-                        int.class, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            XposedBridge.log("MyFloatingModule: *** ANTI-CHEAT BYPASS *** - Blocking violation callback: " + param.args[0]);
-                            param.setResult(null); // Block the violation callback
-                        }
-                    });
+                    try {
+                        XposedHelpers.findAndHookMethod(appGuardClass, "onViolationCallback", 
+                            int.class, new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                XposedBridge.log("MyFloatingModule: *** ANTI-CHEAT BYPASS *** - Blocking violation callback: " + param.args[0]);
+                                param.setResult(null); // Block the violation callback
+                            }
+                        });
+                        XposedBridge.log("MyFloatingModule: ✓ Hooked onViolationCallback");
+                    } catch (Exception e) {
+                        XposedBridge.log("MyFloatingModule: onViolationCallback hook failed: " + e.getMessage());
+                    }
                     
                     // Hook onS2AuthTryCallback to block authentication
-                    XposedHelpers.findAndHookMethod(appGuardClass, "onS2AuthTryCallback", 
-                        int.class, String.class, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            XposedBridge.log("MyFloatingModule: *** ANTI-CHEAT BYPASS *** - Blocking S2Auth callback");
-                            param.setResult(null); // Block the authentication callback
+                    try {
+                        XposedHelpers.findAndHookMethod(appGuardClass, "onS2AuthTryCallback", 
+                            int.class, String.class, new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                XposedBridge.log("MyFloatingModule: *** ANTI-CHEAT BYPASS *** - Blocking S2Auth callback");
+                                param.setResult(null); // Block the authentication callback
+                            }
+                        });
+                        XposedBridge.log("MyFloatingModule: ✓ Hooked onS2AuthTryCallback");
+                    } catch (Exception e) {
+                        XposedBridge.log("MyFloatingModule: onS2AuthTryCallback hook failed: " + e.getMessage());
+                    }
+                    
+                    // Hook all methods in AppGuardUnityManager to block everything
+                    try {
+                        java.lang.reflect.Method[] methods = appGuardClass.getDeclaredMethods();
+                        for (java.lang.reflect.Method method : methods) {
+                            String methodName = method.getName();
+                            if (methodName.contains("Callback") || methodName.contains("Auth") || 
+                                methodName.contains("Violation") || methodName.contains("Check")) {
+                                try {
+                                    XposedHelpers.findAndHookMethod(appGuardClass, methodName, 
+                                        method.getParameterTypes(), new XC_MethodHook() {
+                                        @Override
+                                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                            XposedBridge.log("MyFloatingModule: *** ANTI-CHEAT BYPASS *** - Blocking: " + methodName);
+                                            param.setResult(null); // Block all anti-cheat methods
+                                        }
+                                    });
+                                    XposedBridge.log("MyFloatingModule: ✓ Hooked anti-cheat method: " + methodName);
+                                } catch (Exception e) {
+                                    // Method hook failed, continue
+                                }
+                            }
                         }
-                    });
+                    } catch (Exception e) {
+                        XposedBridge.log("MyFloatingModule: AppGuardUnityManager method scanning failed: " + e.getMessage());
+                    }
                 }
             } catch (Exception e) {
                 XposedBridge.log("MyFloatingModule: AppGuardUnityManager hook failed: " + e.getMessage());
@@ -716,6 +759,40 @@ public class XposedInit implements IXposedHookLoadPackage {
                 }
             } catch (Exception e) {
                 XposedBridge.log("MyFloatingModule: System.exit hook failed: " + e.getMessage());
+            }
+            
+            // Hook Process.killProcess to prevent game from being killed
+            try {
+                Class<?> processClass = XposedHelpers.findClass("android.os.Process", lpparam.classLoader);
+                if (processClass != null) {
+                    XposedHelpers.findAndHookMethod(processClass, "killProcess", 
+                        int.class, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            XposedBridge.log("MyFloatingModule: *** ANTI-CHEAT BYPASS *** - Blocking Process.killProcess call");
+                            param.setResult(null); // Block the kill call
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                XposedBridge.log("MyFloatingModule: Process.killProcess hook failed: " + e.getMessage());
+            }
+            
+            // Hook Activity.finish to prevent activities from closing
+            try {
+                Class<?> activityClass = XposedHelpers.findClass("android.app.Activity", lpparam.classLoader);
+                if (activityClass != null) {
+                    XposedHelpers.findAndHookMethod(activityClass, "finish", 
+                        new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            XposedBridge.log("MyFloatingModule: *** ANTI-CHEAT BYPASS *** - Blocking Activity.finish call");
+                            param.setResult(null); // Block the finish call
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                XposedBridge.log("MyFloatingModule: Activity.finish hook failed: " + e.getMessage());
             }
             
         } catch (Exception e) {
