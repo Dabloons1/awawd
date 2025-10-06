@@ -6,8 +6,11 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.view.Gravity;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -75,6 +78,16 @@ public class MainActivity extends Activity {
         });
         layout.addView(settingsButton);
         
+        Button testButton = new Button(this);
+        testButton.setText("Test Direct Window");
+        testButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                createDirectFloatingWindow();
+            }
+        });
+        layout.addView(testButton);
+        
         return layout;
     }
     
@@ -105,6 +118,42 @@ public class MainActivity extends Activity {
     private void openSettings() {
         Intent intent = new Intent(this, SettingsActivity.class);
         startActivity(intent);
+    }
+    
+    private void createDirectFloatingWindow() {
+        try {
+            android.util.Log.d("MainActivity", "Creating direct floating window test");
+            
+            WindowManager windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+            
+            // Create a simple test window
+            TextView testView = new TextView(this);
+            testView.setText("DIRECT MOD MENU TEST");
+            testView.setTextColor(0xFFFFFFFF);
+            testView.setTextSize(20);
+            testView.setBackgroundColor(0xFFFF0000);
+            testView.setPadding(50, 50, 50, 50);
+            
+            WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_TOAST,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                android.graphics.PixelFormat.TRANSLUCENT
+            );
+            
+            params.gravity = Gravity.CENTER;
+            params.x = 0;
+            params.y = 0;
+            
+            windowManager.addView(testView, params);
+            android.util.Log.d("MainActivity", "✓ Direct floating window created successfully");
+            Toast.makeText(this, "Direct floating window created!", Toast.LENGTH_LONG).show();
+            
+        } catch (Exception e) {
+            android.util.Log.e("MainActivity", "Direct floating window creation failed: " + e.getMessage());
+            Toast.makeText(this, "Direct floating window failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
     
     @Override

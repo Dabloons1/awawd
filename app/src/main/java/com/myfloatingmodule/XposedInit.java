@@ -432,30 +432,8 @@ public class XposedInit implements IXposedHookLoadPackage {
                     XposedBridge.log("MyFloatingModule: UnitySendMessage (3 params) hook failed: " + e.getMessage());
                 }
                 
-                // Try 2-parameter version as fallback
-                try {
-                    XposedHelpers.findAndHookMethod(unityPlayerClass, "UnitySendMessage", 
-                        String.class, String.class, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            String gameObject = (String) param.args[0];
-                            String method = (String) param.args[1];
-                            
-                            // Anti-cheat bypass: Block security-related calls
-                            if (gameObject.contains("AppGuard") || gameObject.contains("HIVE") || 
-                                method.contains("onViolationCallback") || method.contains("AuthV4")) {
-                                XposedBridge.log("MyFloatingModule: *** ANTI-CHEAT BYPASS *** - Blocking: " + gameObject + "." + method);
-                                param.setResult(null); // Block the call
-                                return;
-                            }
-                            
-                            XposedBridge.log("MyFloatingModule: Unity Call - " + gameObject + "." + method);
-                        }
-                    });
-                    XposedBridge.log("MyFloatingModule: ✓ Hooked UnitySendMessage (2 params)");
-                } catch (Exception e) {
-                    XposedBridge.log("MyFloatingModule: UnitySendMessage (2 params) hook failed: " + e.getMessage());
-                }
+                // Skip 2-parameter version to avoid NoSuchMethodError
+                XposedBridge.log("MyFloatingModule: Skipping UnitySendMessage (2 params) to avoid NoSuchMethodError");
             }
             
         } catch (Exception e) {
